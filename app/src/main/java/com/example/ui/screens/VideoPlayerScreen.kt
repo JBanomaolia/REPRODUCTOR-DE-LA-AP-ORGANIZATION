@@ -102,59 +102,15 @@ fun VideoPlayerScreen(
             .background(Color.Black)
     ) {
         // ACTUAL ExoPlayer View (for videos)
-        if (!track.id.startsWith("demo_")) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = viewModel.playbackManager.player
-                        useController = false // We draw our custom Scarlet controls instead!
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            // Gorgeous Cinematic Neon Fallback Canvas Loop (renders high contrast tech grids)
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFF0F0F0F)),
-                contentAlignment = Alignment.Center
-            ) {
-                // Background visual indicator
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.MovieFilter,
-                        contentDescription = null,
-                        tint = ScarletPrimary.copy(alpha = 0.15f),
-                        modifier = Modifier.size(200.dp)
-                    )
-                    Text(
-                        text = "REPRODUCIENDO CONTENIDO CINEMÁTICO\nAP ORGANIZATION MEDIA SYSTEM",
-                        color = CrimsonBorder.copy(alpha = 0.5f),
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Bold
-                    )
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    player = viewModel.playbackManager.player
+                    useController = false // We draw our custom Scarlet controls instead!
                 }
-
-                // Ambient glow circle
-                Box(
-                    modifier = Modifier
-                        .size(140.dp)
-                        .border(1.dp, CrimsonBorder, CircleShape)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.4f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Videocam else Icons.Default.VideocamOff,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-        }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
 
         // THREE-COLUMN DETECTOR FOR GESTURES (Double Taps to Seek / Single Taps to Show UI)
         Row(modifier = Modifier.fillMaxSize()) {

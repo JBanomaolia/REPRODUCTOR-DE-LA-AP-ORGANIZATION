@@ -31,6 +31,7 @@ import com.example.ui.MediaViewModel
 import com.example.ui.theme.CrimsonBorder
 import com.example.ui.theme.DarkGreyBase
 import com.example.ui.theme.ScarletPrimary
+import com.example.ui.TranslationManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,6 +42,7 @@ fun EqualizerScreen(
     val presets by viewModel.equalizerPresets.collectAsState()
     val activePresetName by viewModel.activePresetName.collectAsState()
     val activeBands by viewModel.playbackManager.equalizerBands.collectAsState()
+    val currentLanguage by viewModel.currentLanguage.collectAsState()
 
     var showSaveDialog by remember { mutableStateOf(false) }
     var newPresetName by remember { mutableStateOf("") }
@@ -61,7 +63,7 @@ fun EqualizerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "ECUALIZADOR AVANZADO",
+                text = TranslationManager.translate("EQUALIZER_HEADER", currentLanguage),
                 style = MaterialTheme.typography.titleMedium,
                 color = Color.White
             )
@@ -75,7 +77,7 @@ fun EqualizerScreen(
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Guardar Ajuste",
+                    contentDescription = TranslationManager.translate("EQUALIZER_CUSTOM", currentLanguage),
                     tint = ScarletPrimary
                 )
             }
@@ -312,7 +314,7 @@ fun EqualizerScreen(
             colors = ButtonDefaults.buttonColors(containerColor = ScarletPrimary),
             shape = RoundedCornerShape(25.dp)
         ) {
-            Text("GUARDAR Y APLICAR", style = MaterialTheme.typography.bodyLarge, color = Color.White)
+            Text(TranslationManager.translate("SAVE_AND_APPLY", currentLanguage), style = MaterialTheme.typography.bodyLarge, color = Color.White)
         }
 
         // Save Custom Preset Dialog
@@ -331,7 +333,7 @@ fun EqualizerScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "NUEVO AJUSTE PERSONAL",
+                            text = TranslationManager.translate("EQUALIZER_CUSTOM", currentLanguage).uppercase(),
                             style = MaterialTheme.typography.titleMedium,
                             color = Color.White
                         )
@@ -339,7 +341,7 @@ fun EqualizerScreen(
                         OutlinedTextField(
                             value = newPresetName,
                             onValueChange = { newPresetName = it },
-                            label = { Text("Nombre del ajuste...", color = Color.Gray) },
+                            label = { Text(TranslationManager.translate("CUSTOM_PRESET_LABEL", currentLanguage), color = Color.Gray) },
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = Color.White,
                                 unfocusedTextColor = Color.White,

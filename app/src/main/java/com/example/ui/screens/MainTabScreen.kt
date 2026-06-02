@@ -41,8 +41,12 @@ import com.example.ui.MediaViewModel
 import com.example.ui.theme.CrimsonBorder
 import com.example.ui.theme.DarkGreyBase
 import com.example.ui.theme.ScarletPrimary
+import com.example.ui.AppLanguage
+import com.example.ui.TranslationManager
+import com.example.ui.SortOption
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.accompanist.permissions.rememberPermissionState
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -58,24 +62,31 @@ fun MainTabScreen(
     val isDarkTheme by viewModel.isDarkTheme.collectAsState()
 
     // Query states
-    val musicTracks by viewModel.musicList.collectAsState()
-    val videoTracks by viewModel.videoList.collectAsState()
+    val musicTracks by viewModel.sortedMusicList.collectAsState()
+    val videoTracks by viewModel.sortedVideoList.collectAsState()
     val foldersList by viewModel.videoFolders.collectAsState()
     val albumsList by viewModel.albumsList.collectAsState()
-    val recentlyAddedList by viewModel.recentlyAdded.collectAsState()
+    val recentlyAddedList by viewModel.sortedRecentlyAddedList.collectAsState()
     val smartPlaylistTracks by viewModel.smartPlaylist.collectAsState()
+    val currentLanguage by viewModel.currentLanguage.collectAsState()
+    val sortBy by viewModel.sortBy.collectAsState()
+    val sortAscending by viewModel.sortAscending.collectAsState()
 
     // Filter statuses
     var activeFolderFilter by remember { mutableStateOf<String?>(null) }
     var activeAlbumFilter by remember { mutableStateOf<String?>(null) }
+    var showConfigDialog by remember { mutableStateOf(false) }
 
-    // Media scan permission state
-    val permissionString = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        Manifest.permission.READ_MEDIA_AUDIO
+    // Media scan permission states for Audio + Video + Storage volumes
+    val permissionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        listOf(
+            Manifest.permission.READ_MEDIA_AUDIO,
+            Manifest.permission.READ_MEDIA_VIDEO
+        )
     } else {
-        Manifest.permission.READ_EXTERNAL_STORAGE
+        listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
-    val permissionState = rememberPermissionState(permissionString)
+    val permissionState = rememberMultiplePermissionsState(permissionsList)
 
     Column(
         modifier = Modifier
@@ -123,14 +134,14 @@ fun MainTabScreen(
 
                     Column {
                         Text(
-                            text = "AP ORGANIZATION",
+                            text = TranslationManager.translate("APP_TITLE", currentLanguage),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
                             letterSpacing = 1.sp
                         )
                         Text(
-                            text = "HIGH-RESOLUTION PLAYER",
+                            text = TranslationManager.translate("APP_SUBTITLE", currentLanguage),
                             color = Color.White.copy(alpha = 0.5f),
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
@@ -163,11 +174,11 @@ fun MainTabScreen(
                     // Scanner sync button (Crimson Red with subtle white border opacity)
                     Button(
                         onClick = {
-                            if (permissionState.status.isGranted) {
+                            if (permissionState.allPermissionsGranted) {
                                 viewModel.scanDevices()
-                                Toast.makeText(context, "Buscando pistas locales de sonido y video...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, TranslationManager.translate("SCANNING_TOAST", currentLanguage), Toast.LENGTH_SHORT).show()
                             } else {
-                                permissionState.launchPermissionRequest()
+                                permissionState.launchMultiplePermissionRequest()
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC143C)),
@@ -186,7 +197,7 @@ fun MainTabScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            "ESCANEAR",
+                            text = TranslationManager.translate("SCAN_BUTTON", currentLanguage),
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -195,7 +206,7 @@ fun MainTabScreen(
                 }
             }
         }
-        
+
         // Header separator bottom outline
         Box(
             modifier = Modifier
@@ -205,7 +216,13 @@ fun MainTabScreen(
         )
 
         // Swipe Tabs Title row
-        val tabs = listOf("Música", "Video", "Álbumes", "Reciente")
+        val tabs = listOf(
+            TranslationManager.translate("TAB_MUSIC", currentLanguage),
+            TranslationManager.translate("TAB_VIDEO", currentLanguage),
+            TranslationManager.translate("TAB_ALBUMS", currentLanguage),
+            TranslationManager.translate("TAB_RECENT", currentLanguage),
+            TranslationManager.translate("TAB_STORAGE", currentLanguage)
+        )
         TabRow(
             selectedTabIndex = currentTabIdx,
             containerColor = Color(0xFF121212),
@@ -235,6 +252,11 @@ fun MainTabScreen(
                     }
                 )
             }
+        }
+
+        // Sorting options control bar
+        if (currentTabIdx in listOf(0, 1, 2, 3)) {
+            SortingBar(viewModel = viewModel, onOpenConfig = { showConfigDialog = true })
         }
 
         // Core visual lists split screens
@@ -615,6 +637,9 @@ fun MainTabScreen(
                         }
                     }
                 }
+                4 -> {
+                    StorageManagementTabScreen(viewModel = viewModel, permissionState = permissionState)
+                }
             }
         }
 
@@ -741,6 +766,188 @@ fun MainTabScreen(
                     }
                 }
             }
+        }
+
+        // Configuration Dialog Overlay
+        if (showConfigDialog) {
+            AlertDialog(
+                onDismissRequest = { showConfigDialog = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = { showConfigDialog = false },
+                        modifier = Modifier.testTag("dialog_close_button")
+                    ) {
+                        Text(
+                            text = "LISTO",
+                            color = ScarletPrimary,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                    }
+                },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = null,
+                            tint = ScarletPrimary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "AP CONFIGURATIONS",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Section 1: Track Sorting Order
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = TranslationManager.translate("SORT_OPTION_TITLE", currentLanguage).uppercase(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray,
+                                letterSpacing = 0.5.sp
+                            )
+                            
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                SortOption.values().forEach { option ->
+                                    val isSelected = sortBy == option
+                                    val labelKey = when (option) {
+                                        SortOption.TITLE -> "SORT_BY_TITLE"
+                                        SortOption.ALBUM -> "SORT_BY_ALBUM"
+                                        SortOption.ARTIST -> "SORT_BY_ARTIST"
+                                        SortOption.DATE -> "SORT_BY_DATE"
+                                        SortOption.DURATION -> "SORT_BY_DURATION"
+                                    }
+                                    val label = TranslationManager.translate(labelKey, currentLanguage)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) ScarletPrimary.copy(alpha = 0.2f) else Color(0xFF161616))
+                                            .border(1.dp, if (isSelected) ScarletPrimary else Color.Transparent, RoundedCornerShape(8.dp))
+                                            .clickable { viewModel.setSortBy(option) }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = label.uppercase(),
+                                            color = if (isSelected) Color.White else Color.LightGray,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = ScarletPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF161616))
+                                    .clickable { viewModel.toggleSortOrder() }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = if (sortAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
+                                        contentDescription = null,
+                                        tint = ScarletPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (sortAscending) 
+                                            TranslationManager.translate("SORT_ORDER_ASC", currentLanguage).uppercase()
+                                        else 
+                                            TranslationManager.translate("SORT_ORDER_DESC", currentLanguage).uppercase(),
+                                        color = Color.White,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Text(
+                                    text = "TOGGLE",
+                                    color = ScarletPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                            }
+                        }
+
+                        // Section 2: App Language Selection
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = TranslationManager.translate("CHOOSE_LANGUAGE", currentLanguage).uppercase(),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray,
+                                letterSpacing = 0.5.sp
+                            )
+                            
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                AppLanguage.values().forEach { lang ->
+                                    val isSelected = currentLanguage == lang
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) ScarletPrimary.copy(alpha = 0.2f) else Color(0xFF161616))
+                                            .border(1.dp, if (isSelected) ScarletPrimary else Color.Transparent, RoundedCornerShape(8.dp))
+                                            .clickable { viewModel.setLanguage(lang) }
+                                            .testTag("lang_dialog_${lang.code}")
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(lang.flag, fontSize = 14.sp)
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = lang.displayName.uppercase(),
+                                                color = if (isSelected) Color.White else Color.LightGray,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = ScarletPrimary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                containerColor = Color(0xFF1E1E1E),
+                textContentColor = Color.White,
+                shape = RoundedCornerShape(16.dp)
+            )
         }
     }
 }
@@ -878,3 +1085,425 @@ fun tintedFolderIcon(isCurrent: Boolean) {
 // Helpers for line borders
 fun BottomBorder(width: androidx.compose.ui.unit.Dp) = width
 fun TopBorder(width: androidx.compose.ui.unit.Dp) = width
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+fun StorageManagementTabScreen(
+    viewModel: MediaViewModel,
+    permissionState: com.google.accompanist.permissions.MultiplePermissionsState
+) {
+    val context = LocalContext.current
+    val storageVolumes by viewModel.storageVolumes.collectAsState()
+    val musicTracks by viewModel.musicList.collectAsState()
+    val videoTracks by viewModel.videoList.collectAsState()
+    val currentLanguage by viewModel.currentLanguage.collectAsState()
+    
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag("storage_management_scroll"),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Core Storage Info Panel Header
+        item {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Storage,
+                        contentDescription = "Storage Status",
+                        tint = ScarletPrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "GESTIÓN DE MEMORIAS Y TARJETA SD",
+                        color = Color.White,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Control de acceso directo y catalogado de pistas físicas en tarjetas de memoria microSD y almacenamiento local.",
+                    color = Color.Gray,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        // Permissions Status card
+        item {
+            val allGranted = permissionState.allPermissionsGranted
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (allGranted) Color(0xFF0F1E16) else Color(0xFF221111)
+                ),
+                border = BorderStroke(
+                    1.dp, 
+                    if (allGranted) Color(0xFF1E5C3A).copy(alpha = 0.6f) else Color(0xFFDC143C).copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(if (allGranted) Color(0xFF1AA35B) else Color(0xFFDC143C), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (allGranted) Icons.Default.Check else Icons.Default.PriorityHigh,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "PERMISOS DE MEDIOS",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    if (allGranted) Color(0xFF1AA35B) else Color(0xFFDC143C),
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = if (allGranted) "CONCEDIDO" else "REQUERIDO",
+                                color = Color.White,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = if (allGranted) {
+                            "Acceso desbloqueado al sistema de archivos local y tarjetas SD instaladas de forma óptima. El reproductor AP puede leer directamente tus medios en alta definición."
+                        } else {
+                            "Para buscar pistas de música o documentales de video almacenados físicamente en la memoria interna o externa (micro SD), es necesario autorizar los accesos a los medios."
+                        },
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp
+                    )
+
+                    if (!allGranted) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { permissionState.launchMultiplePermissionRequest() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC143C)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(38.dp)
+                                .testTag("grant_permissions_btn")
+                        ) {
+                            Text("OTORGAR ACCESO A MEDIOS", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Storage Drives title
+        item {
+            Text(
+                "VOLÚMENES Y DISPOSITIVOS DIRECTOS",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.LightGray,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        // List Volumes Dynamically
+        if (storageVolumes.isEmpty()) {
+            item {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .background(Color(0xFF141414), RoundedCornerShape(12.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Cargando discos de almacenamiento...", color = Color.Gray, fontSize = 11.sp)
+                }
+            }
+        } else {
+            items(storageVolumes) { volume ->
+                Card(
+                    modifier = Modifier.fillMaxWidth().testTag("volume_card_${volume.path.hashCode()}"),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
+                    border = BorderStroke(1.dp, CrimsonBorder.copy(alpha = 0.3f)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(Color(0xFF222222), CircleShape)
+                                    .border(1.dp, if (volume.isPrimary) ScarletPrimary else Color.White.copy(alpha = 0.6f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (volume.isPrimary) Icons.Default.Storage else Icons.Default.SdCard,
+                                    contentDescription = null,
+                                    tint = if (volume.isPrimary) ScarletPrimary else Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = volume.description.uppercase(),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = if (volume.isPrimary) "Memoria del Sistema (Interna)" else "Unidad de Almacenamiento Removible / Tarjeta SD",
+                                    color = Color.Gray,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Path & Status Details
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF1A1A1A), RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Ruta física:", color = Color.Gray, fontSize = 10.sp)
+                                Text(volume.path, color = Color.White, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Estado de montaje:", color = Color.Gray, fontSize = 10.sp)
+                                Text(volume.state, color = ScarletPrimary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Individual Mount point Scan Trigger Button
+                        Button(
+                            onClick = {
+                                if (permissionState.allPermissionsGranted) {
+                                    viewModel.scanDevices()
+                                    Toast.makeText(context, "Escaneo profundo en curso: ${volume.description}", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    permissionState.launchMultiplePermissionRequest()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1C1C1C)),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(36.dp)
+                                .testTag("scan_vol_btn_${volume.path.hashCode()}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SyncAlt,
+                                contentDescription = null,
+                                tint = ScarletPrimary,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "ESCANEAR ESTA UNIDAD",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Stats section
+        item {
+            Text(
+                "INDICE DE ARCHIVOS GENERAL",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.LightGray,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF141414)),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, CrimsonBorder.copy(alpha = 0.2f))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceAround
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "${musicTracks.size}",
+                            color = ScarletPrimary,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 24.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Canciones",
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(40.dp)
+                            .background(Color.White.copy(alpha = 0.1f))
+                    )
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "${videoTracks.size}",
+                            color = Color.White,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 24.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Videos",
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(40.dp)
+                            .background(Color.White.copy(alpha = 0.1f))
+                    )
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val total = musicTracks.size + videoTracks.size
+                        Text(
+                            text = "$total",
+                            color = Color.LightGray,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 24.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = TranslationManager.translate("TOTAL_INDEX_LABEL", currentLanguage),
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SortingBar(viewModel: MediaViewModel, onOpenConfig: () -> Unit) {
+    val sortBy by viewModel.sortBy.collectAsState()
+    val sortAscending by viewModel.sortAscending.collectAsState()
+    val currentLanguage by viewModel.currentLanguage.collectAsState()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF141414))
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Sort,
+                contentDescription = null,
+                tint = ScarletPrimary,
+                modifier = Modifier.size(16.dp)
+            )
+            val sortByLabel = when (sortBy) {
+                SortOption.TITLE -> "SORT_BY_TITLE"
+                SortOption.ALBUM -> "SORT_BY_ALBUM"
+                SortOption.ARTIST -> "SORT_BY_ARTIST"
+                SortOption.DATE -> "SORT_BY_DATE"
+                SortOption.DURATION -> "SORT_BY_DURATION"
+            }
+            val dirLabel = if (sortAscending) "SORT_ORDER_ASC" else "SORT_ORDER_DESC"
+            val textValue = "${TranslationManager.translate("SORT_OPTION_TITLE", currentLanguage)}: " +
+                    "${TranslationManager.translate(sortByLabel, currentLanguage)} (${TranslationManager.translate(dirLabel, currentLanguage)})"
+            
+            Text(
+                text = textValue.uppercase(),
+                color = Color.LightGray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Gear-shaped button to configure order and language
+        IconButton(
+            onClick = onOpenConfig,
+            modifier = Modifier
+                .size(34.dp)
+                .background(Color(0xFF222222), RoundedCornerShape(6.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(6.dp))
+                .testTag("app_config_gear_button")
+        ) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = "Configure Application",
+                tint = ScarletPrimary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+

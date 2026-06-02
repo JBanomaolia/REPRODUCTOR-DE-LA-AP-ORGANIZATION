@@ -68,7 +68,7 @@ class PlaybackManager private constructor(private val context: Context) : Player
                 if (player.isPlaying) {
                     _currentPosition.value = player.currentPosition
                     _currentDuration.value = player.duration.coerceAtLeast(0L)
-                } else if (_currentTrack.value != null && _currentTrack.value!!.id.startsWith("demo_")) {
+                } else if (_currentTrack.value != null) {
                     // Simulate progress for beautiful presentation for internal media fallback
                     if (_isPlaying.value) {
                         val nextPos = _currentPosition.value + 1000L
@@ -94,57 +94,60 @@ class PlaybackManager private constructor(private val context: Context) : Player
         _currentDuration.value = if (track.duration > 0) track.duration else 180000L
         _currentPosition.value = 0L
 
-        if (track.id.startsWith("demo_")) {
-            // Software/Demo simulation fallback so it runs beautifully on ANY environment instantly
-            _isPlaying.value = true
-            player.stop() // pause the local exoplayer
-        } else {
-            // Real Local File Playback
-            try {
-                player.stop()
-                player.clearMediaItems()
-                val uri = if (track.path.startsWith("content://")) {
+        // Real Media Playback using ExoPlayer
+        try {
+            player.stop()
+            player.clearMediaItems()
+            val uri = when {
+                track.path.startsWith("content://") || track.path.startsWith("android.resource://") || track.path.startsWith("http://") || track.path.startsWith("https://") -> {
                     Uri.parse(track.path)
-                } else {
+                }
+                else -> {
                     Uri.fromFile(java.io.File(track.path))
                 }
-                player.setMediaItem(MediaItem.fromUri(uri))
-                player.prepare()
-                player.play()
-                _isPlaying.value = true
-
-                // Try to hook into real equalizer audio session
-                setupSystemEqualizer(player.audioSessionId)
-            } catch (e: Exception) {
-                Log.e("PlaybackManager", "Error playing local media: ${e.message}")
-                // Fallback to simulation if file is unreadable
-                _isPlaying.value = true
             }
+            player.setMediaItem(MediaItem.fromUri(uri))
+            player.prepare()
+            player.play()
+            _isPlaying.value = true
+
+            // Try to hook into real equalizer audio session
+            setupSystemEqualizer(player.audioSessionId)
+        } catch (e: Exception) {
+            Log.e("PlaybackManager", "Error playing media: ${e.message}")
+            // Fallback to simulation if file is unreadable (e.g. invalid local path on emulator)
+            _isPlaying.value = true
         }
     }
 
     fun togglePlayPause() {
         val track = _currentTrack.value ?: return
-        if (track.id.startsWith("demo_")) {
-            _isPlaying.value = !_isPlaying.value
+        if (player.isPlaying) {
+            player.pause()
+            _isPlaying.value = false
         } else {
-            if (player.isPlaying) {
-                player.pause()
-                _isPlaying.value = false
-            } else {
-                player.play()
-                _isPlaying.value = true
+            try {
+                if (player.playbackState == Player.STATE_IDLE || player.mediaItemCount == 0) {
+                    playTrack(track, _queue.value)
+                } else {
+                    player.play()
+                    _isPlaying.value = true
+                }
+            } catch (e: Exception) {
+                _isPlaying.value = !_isPlaying.value
             }
         }
     }
 
     fun seekTo(positionMs: Long) {
         val track = _currentTrack.value ?: return
-        if (track.id.startsWith("demo_")) {
-            _currentPosition.value = positionMs.coerceIn(0L, _currentDuration.value)
-        } else {
-            player.seekTo(positionMs)
+        try {
+            if (player.playbackState != Player.STATE_IDLE && player.mediaItemCount > 0) {
+                player.seekTo(positionMs)
+            }
             _currentPosition.value = positionMs
+        } catch (_: Exception) {
+            _currentPosition.value = positionMs.coerceIn(0L, _currentDuration.value)
         }
     }
 

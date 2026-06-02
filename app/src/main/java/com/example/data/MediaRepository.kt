@@ -2,12 +2,25 @@ package com.example.data
 
 import android.content.ContentResolver
 import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.os.storage.StorageManager
 import android.provider.MediaStore
 import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.io.File
+
+data class StorageVolumeInfo(
+    val isPrimary: Boolean,
+    val description: String,
+    val state: String,
+    val path: String
+)
+
 
 class MediaRepository(
     private val context: Context,
@@ -47,13 +60,13 @@ class MediaRepository(
                     // Music demo tracks
                     MediaItemEntity(
                         id = "demo_lamento_boliviano",
-                        title = "Lamento Boliviano (High-Res)",
+                        title = "Lamento Boliviano (High-Res Streams)",
                         artist = "AP Rock Band",
                         album = "Clásicos del Sur",
-                        duration = 224000L,
-                        path = "demo_lamento_boliviano.flac", // mock path or indicator code
+                        duration = 372000L,
+                        path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
                         folder = "Music",
-                        mimeType = "audio/flac",
+                        mimeType = "audio/mpeg",
                         isVideo = false,
                         dateAdded = System.currentTimeMillis() - 86400000L * 3 // 3 days ago
                     ),
@@ -62,8 +75,8 @@ class MediaRepository(
                         title = "De Música Ligera",
                         artist = "Stereo Soda",
                         album = "Grandes de Hoy",
-                        duration = 208000L,
-                        path = "demo_musica_ligera.mp3",
+                        duration = 425000L,
+                        path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
                         folder = "Music",
                         mimeType = "audio/mpeg",
                         isVideo = false,
@@ -74,10 +87,10 @@ class MediaRepository(
                         title = "Cosmic Voyage (Lossless)",
                         artist = "Stellar Synth Orchestra",
                         album = "Future Vision",
-                        duration = 180000L,
-                        path = "demo_cosmic_voyage.alac",
+                        duration = 344000L,
+                        path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
                         folder = "Downloads",
-                        mimeType = "audio/x-alac",
+                        mimeType = "audio/mpeg",
                         isVideo = false,
                         dateAdded = System.currentTimeMillis() - 3600000L // 1 hour ago
                     ),
@@ -86,8 +99,8 @@ class MediaRepository(
                         title = "Amanecer Carmesí",
                         artist = "AP Organization Synth",
                         album = "Crimson Beats",
-                        duration = 150000L,
-                        path = "demo_amanecer_carmesi.mp3",
+                        duration = 302000L,
+                        path = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
                         folder = "Music",
                         mimeType = "audio/mpeg",
                         isVideo = false,
@@ -99,8 +112,8 @@ class MediaRepository(
                         title = "Cataratas de Iguazú UHD",
                         artist = "Natural AP Documentales",
                         album = "Maravillas Mundiales",
-                        duration = 45000L,
-                        path = "demo_cataratas_iguazu.mp4",
+                        duration = 653000L,
+                        path = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
                         folder = "Documentales",
                         mimeType = "video/mp4",
                         isVideo = true,
@@ -111,8 +124,8 @@ class MediaRepository(
                         title = "Cinematic Neon Street",
                         artist = "AP Cyberpunk Films",
                         album = "Vistas Urbanas",
-                        duration = 60000L,
-                        path = "demo_cinematic_neon.mp4",
+                        duration = 596000L,
+                        path = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
                         folder = "Downloads",
                         mimeType = "video/mp4",
                         isVideo = true,
@@ -169,6 +182,7 @@ class MediaRepository(
                 val path = cursor.getString(dataCol)
                 val folder = getParentFolderName(path)
                 val id = cursor.getString(idCol)
+                val contentUri = "content://media/external/audio/media/$id"
                 localMedia.add(
                     MediaItemEntity(
                         id = "local_audio_$id",
@@ -176,7 +190,7 @@ class MediaRepository(
                         artist = cursor.getString(artistCol) ?: "<Desconocido>",
                         album = cursor.getString(albumCol) ?: "<Desconocido>",
                         duration = cursor.getLong(durationCol),
-                        path = path,
+                        path = contentUri,
                         folder = folder,
                         mimeType = cursor.getString(mimeCol) ?: "audio/mpeg",
                         isVideo = false,
@@ -213,6 +227,7 @@ class MediaRepository(
                 val path = cursor.getString(dataCol)
                 val folder = getParentFolderName(path)
                 val id = cursor.getString(idCol)
+                val contentUri = "content://media/external/video/media/$id"
                 localMedia.add(
                     MediaItemEntity(
                         id = "local_video_$id",
@@ -220,7 +235,7 @@ class MediaRepository(
                         artist = cursor.getString(artistCol) ?: "AP Reproductor",
                         album = cursor.getString(albumCol) ?: "Media",
                         duration = cursor.getLong(durationCol),
-                        path = path,
+                        path = contentUri,
                         folder = folder,
                         mimeType = cursor.getString(mimeCol) ?: "video/mp4",
                         isVideo = true,
@@ -238,6 +253,155 @@ class MediaRepository(
             // Just populate demo data
             populateDemoDataIfEmpty()
         }
+
+        // Add physical directories scan for files on external SD memory card & internal standard folders
+        deepScanPhysicalVolumes()
+    }
+
+    suspend fun deepScanPhysicalVolumes() = withContext(Dispatchers.IO) {
+        val storageVolumes = getStorageVolumesInfo()
+        val foundItems = mutableListOf<MediaItemEntity>()
+
+        for (volume in storageVolumes) {
+            val volumeRoot = File(volume.path)
+            if (volumeRoot.exists() && volumeRoot.isDirectory) {
+                // Scan typical user entry-points (Music, Video, Movies, Downloads etc.)
+                val targetFolders = listOf("Music", "Video", "Movies", "Download", "Downloads", "DCIM")
+                for (subName in targetFolders) {
+                    val subFolder = File(volumeRoot, subName)
+                    if (subFolder.exists() && subFolder.isDirectory) {
+                        traverseAndCollectMedia(subFolder, foundItems)
+                    }
+                }
+                // Also scan the root itself (shallowly)
+                val rootFiles = volumeRoot.listFiles() ?: continue
+                for (f in rootFiles) {
+                    if (f.isFile) {
+                        collectFileIfMedia(f, foundItems)
+                    }
+                }
+            }
+        }
+
+        if (foundItems.isNotEmpty()) {
+            mediaDao.insertMediaItems(foundItems)
+            Log.d("MediaRepository", "Scanned ${foundItems.size} items from physical paths.")
+        }
+    }
+
+    private fun traverseAndCollectMedia(dir: File, list: MutableList<MediaItemEntity>) {
+        val files = dir.listFiles() ?: return
+        for (f in files) {
+            if (f.isDirectory) {
+                // Exclude system/hidden directories
+                if (f.name != "Android" && !f.name.startsWith(".")) {
+                    traverseAndCollectMedia(f, list)
+                }
+            } else if (f.isFile) {
+                collectFileIfMedia(f, list)
+            }
+        }
+    }
+
+    private fun collectFileIfMedia(f: File, list: MutableList<MediaItemEntity>) {
+        val name = f.name
+        val ext = name.substringAfterLast(".", "").lowercase()
+        val isAudio = ext in listOf("mp3", "flac", "wav", "m4a", "ogg", "alac")
+        val isVideo = ext in listOf("mp4", "mkv", "avi", "3gp", "webm")
+
+        if (isAudio || isVideo) {
+            val mimeType = if (isVideo) "video/$ext" else "audio/$ext"
+            val parentFolder = f.parentFile?.name ?: "Almacenamiento"
+            val duration = getDurationOfFile(f)
+            val path = f.absolutePath
+
+            // Create a unique id for physical scanning to prevent duplicates
+            val id = "physical_${path.hashCode()}"
+
+            list.add(
+                MediaItemEntity(
+                    id = id,
+                    title = name.substringBeforeLast("."),
+                    artist = if (isVideo) "Video Local" else "Artista Local",
+                    album = parentFolder,
+                    duration = duration,
+                    path = path,
+                    folder = parentFolder,
+                    mimeType = mimeType,
+                    isVideo = isVideo,
+                    dateAdded = f.lastModified()
+                )
+            )
+        }
+    }
+
+    private fun getDurationOfFile(file: File): Long {
+        var duration = 150000L // 2.5 minutes fallback
+        val retriever = android.media.MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(file.absolutePath)
+            val durationStr = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)
+            if (durationStr != null) {
+                duration = durationStr.toLong()
+            }
+        } catch (_: Exception) {
+        } finally {
+            try {
+                retriever.release()
+            } catch (_: Exception) {}
+        }
+        return duration
+    }
+
+    fun getStorageVolumesInfo(): List<StorageVolumeInfo> {
+        val list = mutableListOf<StorageVolumeInfo>()
+        val storageManager = context.getSystemService(Context.STORAGE_SERVICE) as? StorageManager
+        
+        if (storageManager != null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                val volumes = storageManager.storageVolumes
+                for (vol in volumes) {
+                    val isPrimary = vol.isPrimary
+                    val desc = vol.getDescription(context) ?: if (isPrimary) "Almacenamiento Interno" else "Tarjeta MicroSD Externa"
+                    val state = vol.state ?: "MOUNTED"
+                    
+                    var path = ""
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        path = vol.directory?.absolutePath ?: ""
+                    }
+                    
+                    if (path.isEmpty()) {
+                        val dirs = context.getExternalFilesDirs(null)
+                        if (isPrimary && dirs.isNotEmpty() && dirs[0] != null) {
+                            path = dirs[0]!!.absolutePath.substringBefore("/Android")
+                        } else if (!isPrimary && dirs.size > 1 && dirs[1] != null) {
+                            path = dirs[1]!!.absolutePath.substringBefore("/Android")
+                        } else {
+                            path = if (isPrimary) Environment.getExternalStorageDirectory().absolutePath else ""
+                        }
+                    }
+                    
+                    if (path.isNotEmpty()) {
+                        list.add(StorageVolumeInfo(isPrimary, desc, state, path))
+                    }
+                }
+            }
+        }
+        
+        // Ensure at least internal is listed if StorageManager list fails or is empty
+        if (list.isEmpty()) {
+            val internalPath = Environment.getExternalStorageDirectory().absolutePath
+            list.add(StorageVolumeInfo(true, "Almacenamiento Interno", "MOUNTED", internalPath))
+            
+            // Check for potential secondary external SD cards from getExternalFilesDirs
+            val dirs = context.getExternalFilesDirs(null)
+            if (dirs.size > 1 && dirs[1] != null) {
+                val sdPath = dirs[1]!!.absolutePath.substringBefore("/Android")
+                list.add(StorageVolumeInfo(false, "Tarjeta SD Externa", "MOUNTED", sdPath))
+            }
+        }
+        
+        return list
     }
 
     private fun getParentFolderName(path: String?): String {
