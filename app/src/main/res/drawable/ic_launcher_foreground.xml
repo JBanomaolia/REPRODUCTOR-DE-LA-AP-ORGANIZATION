@@ -1,0 +1,81 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Primary stylized AP Monogram with gorgeous Scarlet-to-MatteBlack gradient -->
+    <path
+        android:pathData="M30,80 C26,80 23,73 29,66 L44,28 C46,24 50,24 52,28 L57,42 C58,40 59,39 61,39 C67,39 79,40 82,49 C85,58 80,69 71,71 C67,72 63,70 60,67 L60,78 C60,81 58,83 55,81 C51,79 49,63 49,61 L36,61 L31,80 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="54"
+                android:startY="20"
+                android:endX="54"
+                android:endY="84"
+                android:type="linear">
+                <item android:color="#FFFF2400" android:offset="0.0" />
+                <item android:color="#FFB31000" android:offset="0.4" />
+                <item android:color="#FF400500" android:offset="0.7" />
+                <item android:color="#FF000000" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Custom interior counter/cutout of A -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M37.5,56 L47.5,56 L42.5,42 Z" />
+
+    <!-- Organic creepers and thorns (Scarlet Red glowing twigs) -->
+    <!-- Twig 1 on left leg of A -->
+    <path
+        android:fillColor="#FFFF2400"
+        android:pathData="M 28,60 C 26,56 22,58 24,62 C 25,63 27,61 28,60 Z" />
+    <!-- Twig 2 on left of A's apex -->
+    <path
+        android:fillColor="#FFFF2400"
+        android:pathData="M 38,36 C 35,32 31,34 33,38 C 34,39 36,37 38,36 Z" />
+    <!-- Twig 3 on P's outer loop -->
+    <path
+        android:fillColor="#FFFF2400"
+        android:pathData="M 81,45 C 84,41 89,44 86,47 C 84,48 82,46 81,45 Z" />
+    <path
+        android:fillColor="#FFB31000"
+        android:pathData="M 76,60 C 82,62 84,55 80,54 C 77,53 75,58 76,60 Z" />
+
+    <!-- Creepy Sclera / Eyes (White backgrounds) -->
+    <!-- Eye 1: Top of P loop -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 68,46 C 65,44 71,42 74,45 C 76,47 71,48 68,46 Z" />
+    <path
+        android:fillColor="#FF2400"
+        android:pathData="M 71,45.2 A 1.2,1.2 0 1 1 68.6,45.2 A 1.2,1.2 0 1 1 71,45.2" />
+
+    <!-- Eye 2: Middle segment of P -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 62.5,55 C 60,53 66,51 68,54 C 69.5,56.5 64.5,56.5 62.5,55 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M 65,54.5 A 0.8,0.8 0 1 1 63.4,54.5 A 0.8,0.8 0 1 1 65,54.5" />
+
+    <!-- Eye 3: Left leg of A (tiny looking eye) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 33,52 C 30,51 31,54 34,54 C 36,54 35,52 33,52 Z" />
+    <path
+        android:fillColor="#FF2400"
+        android:pathData="M 33.5,53 A 0.6,0.6 0 1 1 32.3,53 A 0.6,0.6 0 1 1 33.5,53" />
+
+    <!-- Menacing Tooth Mouth on the lower right stem of A -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 45,71 Q 48,68 51,71 Q 50,74 45,71 Z" />
+    <!-- Sharp white teeth vectors -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 46,71 L 47,69 L 48,71 L 49,69 L 50,71 Z" />
+</vector>

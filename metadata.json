@@ -1,0 +1,6 @@
+{
+  "name": "REPRODUCTOR DE LA AP ORGANIZATION",
+  "description": "Reproductor avanzado de música y vídeo con ecualizador, letras sincronizadas, partituras y soporte para formatos sin pérdida (FLAC/ALAC) de la AP Organization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
